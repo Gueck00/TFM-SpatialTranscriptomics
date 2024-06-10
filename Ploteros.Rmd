@@ -1,0 +1,709 @@
+---
+title: "Ploteros"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-05-27"
+---
+
+
+```{r, eval=F, include=F}
+library(SpatialExperiment)
+library(spatialLIBD)
+library(Seurat)
+# library(infotheo)
+# library(clevr)
+library(ggplot2)
+library(cluster)
+library(scran)
+library(scater)
+library(pheatmap)
+library(patchwork)
+library(ggplot2)
+library(reshape2)
+library(ggspavis)
+library(dplyr)
+library(ggrepel)
+```
+
+# Plots exploratorios
+
+```{r, eval=F, include=F}
+load("./datos/definitivo/dlpfc_list_definitive.Rdata")
+
+colData(dlpfc_list[[9]])$sum <- colSums(counts(dlpfc_list[[9]]))
+
+rownames(dlpfc_list[[9]]) <- rowData(dlpfc_list[[9]])$gene_name
+
+hunos <- c()
+for (i in 1:12){
+  hunos[i] <- sum((as.matrix(assay(dlpfc_list[[i]])) == 0))/length(as.matrix(assay(dlpfc_list[[i]])))
+}
+
+round(hunos,3)
+
+sum((as.matrix(assay(dlpfc_list[[1]])) == 0))
+```
+
+```{r, eval=F, include=F}
+
+p1 <- plotSpots(dlpfc_list[[9]], annotate = "sum", point_size = 0.9 , pal = c("white","darkgreen"))
+
+plotSpots(dlpfc_list[[9]], annotate = "MOG", point_size = 0.9 , pal = c("#F0F0F0","darkred"))
+plotSpots(dlpfc_list[[9]], annotate = "CLDN11", point_size = 0.9 , pal = c("#F0F0F0","darkorange"))
+
+plotSpots(dlpfc_list[[9]], annotate = "HPCAL1", point_size = 0.9 , pal = c("#F0F0F0","darkgreen"))
+plotSpots(dlpfc_list[[9]], annotate = "VSTM2A", point_size = 0.9 , pal = c("#F0F0F0","darkblue"))
+
+plotSpots(dlpfc_list[[9]], annotate = "CPB1", point_size = 0.9 )
+plotSpots(dlpfc_list[[9]], annotate = "MGP", point_size = 0.9 )
+
+
+```
+
+```{r, eval=F, include=F}
+# Convertir los datos en numéricos
+cldn11_counts <- as.numeric(counts(dlpfc_list[[9]]["CLDN11",]))
+mog_counts <- as.numeric(counts(dlpfc_list[[9]]["MOG",]))
+hpcal1_counts <- as.numeric(counts(dlpfc_list[[9]]["HPCAL1",]))
+vstm2a_counts <- as.numeric(counts(dlpfc_list[[9]]["VSTM2A",]))
+
+# Crear data frames separados para cada vector de datos
+df_cldn11 <- data.frame(counts = cldn11_counts, Gen = "cldn11")
+df_mog <- data.frame(counts = mog_counts, Gen = "mog")
+df_hpcal1 <- data.frame(counts = hpcal1_counts, Gen = "hpcal1")
+df_vstm2a <- data.frame(counts = vstm2a_counts, Gen = "vstm2a")
+
+# Combinar todos los data frames en uno solo
+df <- rbind(df_cldn11, df_mog, df_hpcal1, df_vstm2a)
+
+# Crear el histograma con diferentes colores para cada grupo
+ggplot(df, aes(x = counts, fill = Gen)) +
+  geom_histogram(alpha = 0.6, position = "identity", binwidth = 1) + 
+  scale_fill_manual(values = c("darkred", "darkorange", "darkgreen", "darkblue")) +
+  labs(title = "Histogramas de la selección de genes", x = "Conteos", y = NULL) +
+  theme_minimal()
+```
+
+## Control de calidad (muestra 9)
+
+```{r carga datos}
+load("./datos/definitivo/dlpfc_list_definitive.Rdata")
+
+muestra9 <- dlpfc_list[[9]]
+
+rm(dlpfc_list)
+```
+
+```{r QC metrics}
+is_mito <- grepl("(^MT-)|(^mt-)", rowData(muestra9)$gene_name)
+table(is_mito)
+
+muestra9 <- addPerCellQC(muestra9, subsets = list(mito = is_mito))
+```
+
+```{r library size}
+colData(muestra9)$Conteos_totales <- colData(muestra9)$sum
+plotSpotQC(muestra9, plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "Conteos_totales", y_threshold = 600)
+
+plotSpots(muestra9, annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(muestra9)$sum < 600
+colData(muestra9)$qc_lib_size <- qc_lib_size
+
+plotSpotQC(muestra9, plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+```
+
+```{r detected genes}
+colData(muestra9)$Genes_detectados <- colData(muestra9)$detected
+plotSpotQC(muestra9, plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "Genes_detectados", y_threshold = 400)
+
+plotSpots(muestra9, annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(muestra9)$detected < 400
+colData(muestra9)$qc_detected <- qc_detected
+
+plotSpotQC(muestra9, plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+```
+
+```{r mitocondrial}
+colData(muestra9)$Proporcion_mitocondrial <- colData(muestra9)$subsets_mito_percent
+plotSpotQC(muestra9, plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "Proporcion_mitocondrial", y_threshold = 28)
+
+plotSpots(muestra9, annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(muestra9)$subsets_mito_percent > 28
+colData(muestra9)$qc_mito <- qc_mito
+
+plotSpotQC(muestra9, plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+```
+
+```{r number of cells}
+
+ggplot(colData(muestra9), aes(x = cell_count)) +
+  geom_histogram(bins = 26, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+plotSpots(muestra9, annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(muestra9)$cell_count > 10
+colData(muestra9)$qc_cell_count <- qc_cell_count
+
+plotSpotQC(muestra9, plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+```
+
+```{r discard totales}
+# number of discarded spots for each metric
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(muestra9)$discard <- discard
+
+plotSpotQC(muestra9, plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+```
+
+```{r discard totales para todas las muestras}
+spe <- spatialLIBD::fetch_data("spe")
+
+samples <- unique(spe$sample_id)
+discardos <- c()
+for (i in 1:12){
+  discardos[i] <- sum(spe[, spe$sample_id == samples[i]]$discard)
+}
+
+discardos # Vaya por dios, no está hecho de forma que pueda copiar directamente los datos, habrá que calcularlos 1 a 1...
+
+plotSpotQC(spe[, spe$sample_id == samples[8]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+```
+
+## Normalización
+
+```{r}
+load("./datos/definitivo/dlpfc_list_definitive.Rdata")
+
+muestra9 <- dlpfc_list[[9]]
+
+rm(dlpfc_list)
+
+is_mito <- grepl("(^MT-)|(^mt-)", rowData(muestra9)$gene_name)
+table(is_mito)
+
+muestra9 <- addPerCellQC(muestra9, subsets = list(mito = is_mito))
+
+muestra9  <- computeLibraryFactors(muestra9)
+
+muestra9 <- logNormCounts(muestra9)
+
+
+muestra9$logsum <- colSums(assay(muestra9, "logcounts"))
+```
+
+```{r}
+normalization <- data.frame(sum = muestra9$sum, sizeFactor = sizeFactors(muestra9))
+
+# Crear el gráfico con ggplot2
+ggplot(normalization, aes(x = sizeFactor, y = sum)) +
+  geom_point() +
+  labs(x = "Factor de escalado", y = "Tamaño de librería")+
+  theme_minimal()
+
+rownames(muestra9) <- rowData(muestra9)$gene_name
+
+cldn11_counts <- as.numeric(counts(muestra9["CLDN11",]))[which(as.numeric(counts(muestra9["CLDN11",])) != 0)]
+mog_counts <- as.numeric(counts(muestra9["MOG",]))[which(as.numeric(counts(muestra9["MOG",])) != 0)]
+hpcal1_counts <- as.numeric(counts(muestra9["HPCAL1",]))[which(as.numeric(counts(muestra9["HPCAL1",])) != 0)]
+vstm2a_counts <- as.numeric(counts(muestra9["VSTM2A",]))[which(as.numeric(counts(muestra9["VSTM2A",])) != 0)]
+
+cldn11_logcounts <- as.numeric(logcounts(muestra9["CLDN11",]))[which(as.numeric(logcounts(muestra9["CLDN11",])) != 0)]
+mog_logcounts <- as.numeric(logcounts(muestra9["MOG",]))[which(as.numeric(logcounts(muestra9["MOG",])) != 0)]
+hpcal1_logcounts <- as.numeric(logcounts(muestra9["HPCAL1",]))[which(as.numeric(logcounts(muestra9["HPCAL1",])) != 0)]
+vstm2a_logcounts <- as.numeric(logcounts(muestra9["VSTM2A",]))[which(as.numeric(logcounts(muestra9["VSTM2A",])) != 0)]
+
+df_cldn11 <- data.frame(counts = cldn11_counts, Gen = "cldn11")
+df_mog <- data.frame(counts = mog_counts, Gen = "mog")
+df_hpcal1 <- data.frame(counts = hpcal1_counts, Gen = "hpcal1")
+df_vstm2a <- data.frame(counts = vstm2a_counts, Gen = "vstm2a")
+
+# Combinar todos los data frames en uno solo
+df <- rbind(df_cldn11, df_mog, df_hpcal1, df_vstm2a)
+
+# Crear el histograma con diferentes colores para cada grupo
+ggplot(df, aes(x = counts, fill = Gen)) +
+  geom_histogram(alpha = 0.6, position = "identity", binwidth = 1) + 
+  scale_fill_manual(values = c("darkred", "darkorange", "darkgreen", "darkblue")) +
+  labs(title = "Histogramas de la selección de genes", x = "Conteos", y = NULL) +
+  theme_minimal()
+
+dflog_cldn11 <- data.frame(counts = cldn11_logcounts, Gen = "cldn11")
+dflog_mog <- data.frame(counts = mog_logcounts, Gen = "mog")
+dflog_hpcal1 <- data.frame(counts = hpcal1_logcounts, Gen = "hpcal1")
+dflog_vstm2a <- data.frame(counts = vstm2a_logcounts, Gen = "vstm2a")
+
+# Combinar todos los data frames en uno solo
+dflog <- rbind(dflog_cldn11, dflog_mog, dflog_hpcal1, dflog_vstm2a)
+
+# Crear el histograma con diferentes colores para cada grupo
+ggplot(dflog, aes(x = counts, fill = Gen)) +
+  geom_histogram(alpha = 0.6, position = "identity", binwidth = 0.3) + 
+  scale_fill_manual(values = c("darkred", "darkorange", "darkgreen", "darkblue")) +
+  labs(title = "Histogramas de la selección de genes", x = "Conteos", y = NULL) +
+  theme_minimal()
+
+boxplot(muestra9$sum)
+
+boxplot(muestra9$logsum)
+```
+
+```{r}
+load("./datos/definitivo/dlpfc_list_definitive.Rdata")
+
+muestra9 <- dlpfc_list[[9]]
+
+rm(dlpfc_list)
+
+conteos <- as.vector(as.matrix(assay(muestra9, "counts")))
+conteos <- conteos[conteos != 0]
+
+logos <- as.vector(as.matrix(assay(muestra9, "logcounts")))
+logos <- logos[logos != 0]
+
+hist(logos, breaks = 50)
+hist(conteos[conteos < 15], breaks = 15)
+
+ggplot(data.frame(logos[logos < 4]), aes(x = logos[logos < 4])) +
+  geom_histogram(bins = 50, fill = "#4682b4", color = "grey") +
+  labs(title = NULL,
+       x = "Conteos Log-Normalizdos",
+       y = NULL) +
+  theme_minimal()
+
+ggplot(data.frame(conteos[conteos < 15]), aes(x = conteos[conteos < 15])) +
+  geom_histogram(bins = 15, fill = "#4682b4", color = "grey") +
+  labs(title = NULL,
+       x = "Conteos",
+       y = "Frecuencia") +
+  theme_minimal()
+
+```
+
+## HVGs
+
+```{r}
+rownames(muestra9) <- rowData(muestra9)$gene_name
+
+library(scran)
+# fit mean-variance relationship
+dec <- modelGeneVar(muestra9)
+
+# visualize mean-variance relationship
+fit <- metadata(dec)
+plot(fit$mean, fit$var, 
+     xlab = "Media de la log-expresion", ylab = "Varianza de la log-expresion", col = (as.integer(rownames(dec) %in% top_hvgs)+1))
+curve(fit$trend(x), col = "dodgerblue", add = TRUE, lwd = 2)
+
+top_hvgs <- getTopHVGs(dec, prop = 0.1)
+
+length(top_hvgs)
+
+df <- data.frame(mean = fit$mean, var = fit$var)
+df$HVG <- as.factor(as.integer(rownames(dec) %in% top_hvgs) + as.integer(rownames(dec) %in% c("PLP1","MBP"))+ 1)
+
+# Crear el gráfico con ggplot2
+ggplot(df, aes(x = mean, y = var, color = HVG)) +
+  geom_point() +
+  scale_color_manual(values = c("1" = "black", "2" = "dodgerblue", "3" = "darkblue")) +
+  labs(x = "Media de la log-expresión", y = "Varianza de la log-expresión") +
+  stat_function(fun = fit$trend, color = "yellow", linewidth = 1) +
+  theme_minimal() +
+  theme(legend.position = "none") 
+
+plotSpots(muestra9, annotate = "PLP1", point_size = 0.9 , pal = c("#F0F0F0","darkblue"))
+plotSpots(muestra9, annotate = "MBP", point_size = 0.9 , pal = c("#F0F0F0","darkblue"))
+```
+
+## Dismensionality reduction
+
+```{r}
+load("./datos/definitivo/dlpfc_list_definitive.Rdata")
+
+muestra9 <- dlpfc_list[[9]]
+
+rm(dlpfc_list)
+
+muestra9 <- muestra9[,!is.na(muestra9$layer_guess)]
+muestra9$Anotaciones <- muestra9$layer_guess
+
+paleta <- c("#264653","#287271","#2a9d8f","#8ab17d","#e9c46a","#f4a261","#e76f51")
+
+plotDimRed(muestra9, plot_type = "PCA",point_size = 1)
+plotDimRed(muestra9, plot_type = "PCA", 
+           annotate = "Anotaciones", pal = paleta, point_size = 1)
+
+
+muestra9 <- runUMAP(muestra9, dimred = "PCA")
+
+plotDimRed(muestra9, plot_type = "UMAP",point_size = 1)
+plotDimRed(muestra9, plot_type = "UMAP", 
+           annotate = "Anotaciones", pal = paleta, point_size = 1)
+```
+
+## Agrupamiento
+
+```{r}
+load("./datos/definitivo/dlpfc_list_definitive.Rdata")
+
+muestra9 <- dlpfc_list[[9]]
+
+rm(dlpfc_list)
+
+muestra9 <- muestra9[,!is.na(muestra9$layer_guess)]
+muestra9$Anotaciones <- muestra9$layer_guess
+paleta <- c("#264653","#287271","#2a9d8f","#8ab17d","#e9c46a","#f4a261","#e76f51")
+plotSpots(muestra9, annotate = "Anotaciones", point_size = 1.6 , pal = paleta)
+
+# Bayes del espacio
+paleta <- c("#8ab17d","#e9c46a","#f4a261","#e76f51","#2a9d8f","#264653","#287271")
+plotSpots(muestra9, annotate = "spatial.cluster", point_size = 1.4 , pal = paleta, legend_position = "none", ) +
+  labs(title = "BayesSpace")
+
+# DR.SC
+paleta <- c("#e9c46a","#e76f51","#f4a261","#8ab17d","#287271","#2a9d8f","#264653")
+plotSpots(muestra9, annotate = "spatial.drsc.cluster", point_size = 1.4 , pal = paleta, legend_position = "none") +
+  labs(title = "DR-SC")
+
+# SC.MEB
+paleta <- c("#2a9d8f","#e9c46a","#f4a261","#e76f51","#287271","#264653","#8ab17d")
+plotSpots(muestra9, annotate = "spatialcluster.sc_meb", point_size = 1.4 , pal = paleta, legend_position = "none") +
+  labs(title = "SC-MEB")
+
+# BASS
+paleta <- c("#2a9d8f","#e9c46a","#e76f51","#264653","#f4a261","#8ab17d","#287271")
+plotSpots(muestra9, annotate = "bass.spatialcluster", point_size = 1.4 , pal = paleta, legend_position = "none") +
+  labs(title = "BASS")
+
+# K-means
+paleta <- c("#e76f51","#2a9d8f","#8ab17d","#e9c46a","#f4a261","#264653","#287271")
+plotSpots(muestra9, annotate = "kmeans.cluster", point_size = 1.4 , pal = paleta, legend_position = "none") +
+  labs(title = "K-means")
+
+# Louvain
+paleta <- c("#e76f51","#264653","#2a9d8f","#8ab17d","#f4a261","#e9c46a","#287271")
+plotSpots(muestra9, annotate = "louvain.cluster", point_size = 1.4 , pal = paleta, legend_position = "none") +
+  labs(title = "Louvain")
+```
+
+## Comparativa
+
+### Correlación por donantes
+
+```{r} 
+load("./datos/definitivo/bench_list.Rdata")
+
+for (i in 1:12){
+  bench_list[[i]] <- bench_list[[i]][,-1]
+  colnames(bench_list[[i]]) <- c("BayesSpace","DR.SC","SC-MEB","BASS","k-means","Louvain")
+}
+
+res.donan <- matrix(unlist(lapply(bench_list, function(x) as.vector(as.matrix(x)))),ncol = 12)
+
+cor_matrix <- cor(res.donan)
+rownames(cor_matrix) <- colnames(cor_matrix) <- paste0("Muestra",1:12)
+
+
+# Convertir la matriz de correlaciones en un data frame largo (long format)
+cor_df <- melt(cor_matrix)
+
+
+ggplot(cor_df, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradientn(colors = c("white","red"), limits = c(0.80, 1), name = "Correlación") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  labs(x = NULL, y = NULL, title = "Cerrelación entre resultados") + 
+  annotate("rect", xmin = 0.5, xmax = 4.5, ymin = 0.5, ymax = 4.5, color = "black", fill = NA, linewidth = 1.5, linetype = "dashed") +
+  annotate("rect", xmin = 4.5, xmax = 8.5, ymin = 4.5, ymax = 8.5, color = "black", fill = NA, linewidth = 1.5, linetype = "dashed") +
+  annotate("rect", xmin = 8.5, xmax = 12.5, ymin = 8.5, ymax = 12.5, color = "black", fill = NA, linewidth = 1.5, linetype = "dashed")
+```
+
+### Correlación por métodos
+
+```{r} 
+load("./datos/definitivo/bench_list.Rdata")
+
+for (i in 1:12){
+  bench_list[[i]] <- bench_list[[i]][,-1]
+  colnames(bench_list[[i]]) <- c("BayesSpace","DR.SC","SC-MEB","BASS","k-means","Louvain")
+}
+
+res.met <- rbind(bench_list[[1]],bench_list[[2]],bench_list[[3]],bench_list[[4]],bench_list[[5]],bench_list[[6]],bench_list[[7]],bench_list[[8]],bench_list[[9]],bench_list[[10]],bench_list[[11]],bench_list[[12]])
+
+res.met <- res.met[, c(1, 4, 3, 2, 5:ncol(res.met))]
+cor_matrix <- cor(res.met)
+
+# Convertir la matriz de correlaciones en un data frame largo (long format)
+cor_df <- melt(cor_matrix)
+
+
+ggplot(cor_df, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradientn(colors = c("white","red"), limits = c(0.5, 1), name = "Correlación") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10)) +
+  labs(x = NULL, y = NULL, title = "Correlación entre métodos") + 
+  annotate("rect", xmin = 0.5, xmax = 4.5, ymin = 0.5, ymax = 4.5, color = "darkgreen", fill = NA, linewidth = 1.5, linetype = "dashed") + 
+  annotate("rect", xmin = 4.5, xmax = 6.5, ymin = 4.5, ymax = 6.5, color = "blue", fill = NA, linewidth = 1.5, linetype = "dashed") +
+  annotate("rect", xmin = 0.53, xmax = 2.5, ymin = 0.53, ymax = 2.5, color = "green", fill = NA, linewidth = 1, linetype = "dashed") +
+  annotate("rect", xmin = 2.5, xmax = 4.47, ymin = 2.5, ymax = 4.47, color = "green", fill = NA, linewidth = 1, linetype = "dashed")
+```
+
+
+### NMI
+
+```{r}
+NMI <- matrix(unlist(lapply(bench_list, function(x) x["NMI",])), byrow = T, ncol = 6)
+colnames(NMI) <- c("BayesSpace","DR.SC","SC-MEB","BASS","k-means","Louvain")
+rownames(NMI) <- paste0("Muestra",1:12)
+
+NMI <- melt(NMI)
+colnames(NMI) <- c("Muestras","Métodos","value")
+
+is_outlier <- function(x) {
+  return(x < quantile(x, 0.25) - 1.5 * IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x))
+}
+
+# Crear una columna que indique si el valor es un outlier
+NMI <- NMI %>%
+  group_by(Métodos) %>%
+  mutate(is_outlier = ifelse(is_outlier(value), Muestras, NA))
+
+ggplot(NMI, aes(x = Métodos, y = value, fill = Métodos)) +
+  geom_boxplot() +
+  geom_text_repel(aes(label = is_outlier), na.rm = TRUE, size = 4, max.overlaps = 10) +
+  labs(y = NULL, x = NULL, title = "NMI") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")
+```
+
+### ARI
+
+```{r}
+ARI <- matrix(unlist(lapply(bench_list, function(x) x["ARI",])), byrow = T, ncol = 6)
+colnames(ARI) <- c("BayesSpace","DR.SC","SC-MEB","BASS","k-means","Louvain")
+rownames(ARI) <- paste0("Muestra",1:12)
+
+ARI <- melt(ARI)
+colnames(ARI) <- c("Muestras","Métodos","value")
+
+is_outlier <- function(x) {
+  return(x < quantile(x, 0.25) - 1.5 * IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x))
+}
+
+# Crear una columna que indique si el valor es un outlier
+ARI <- ARI %>%
+  group_by(Métodos) %>%
+  mutate(is_outlier = ifelse(is_outlier(value), Muestras, NA))
+
+ggplot(ARI, aes(x = Métodos, y = value, fill = Métodos)) +
+  geom_boxplot() +
+  geom_text_repel(aes(label = is_outlier), na.rm = TRUE, size = 4, max.overlaps = 10) +
+  labs(y = NULL, x = NULL, title = "ARI") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")
+```
+
+### HOM
+
+```{r}
+HOM <- matrix(unlist(lapply(bench_list, function(x) x["HOM",])), byrow = T, ncol = 6)
+colnames(HOM) <- c("BayesSpace","DR.SC","SC-MEB","BASS","k-means","Louvain")
+rownames(HOM) <- paste0("Muestra",1:12)
+
+HOM <- melt(HOM)
+colnames(HOM) <- c("Muestras","Métodos","value")
+
+is_outlier <- function(x) {
+  return(x < quantile(x, 0.25) - 1.5 * IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x))
+}
+
+# Crear una columna que indique si el valor es un outlier
+HOM <- HOM %>%
+  group_by(Métodos) %>%
+  mutate(is_outlier = ifelse(is_outlier(value), Muestras, NA))
+
+ggplot(HOM, aes(x = Métodos, y = value, fill = Métodos)) +
+  geom_boxplot() +
+  geom_text_repel(aes(label = is_outlier), na.rm = TRUE, size = 4, max.overlaps = 10) +
+  labs(y = NULL, x = NULL, title = "HOM") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")
+```
+
+### COM
+
+```{r}
+COM <- matrix(unlist(lapply(bench_list, function(x) x["COM",])), byrow = T, ncol = 6)
+colnames(COM) <- c("BayesSpace","DR.SC","SC-MEB","BASS","k-means","Louvain")
+rownames(COM) <- paste0("Muestra",1:12)
+
+COM <- melt(COM)
+colnames(COM) <- c("Muestras","Métodos","value")
+
+is_outlier <- function(x) {
+  return(x < quantile(x, 0.25) - 1.5 * IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x))
+}
+
+# Crear una columna que indique si el valor es un outlier
+COM <- COM %>%
+  group_by(Métodos) %>%
+  mutate(is_outlier = ifelse(is_outlier(value), Muestras, NA))
+
+ggplot(COM, aes(x = Métodos, y = value, fill = Métodos)) +
+  geom_boxplot() +
+  geom_text_repel(aes(label = is_outlier), na.rm = TRUE, size = 4, max.overlaps = 10) +
+  labs(y = NULL, x = NULL, title = "COM") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")
+```
+
+### PAS
+
+```{r}
+PAS <- matrix(unlist(lapply(bench_list, function(x) x["PAS",])), byrow = T, ncol = 6)
+colnames(PAS) <- c("BayesSpace","DR.SC","SC-MEB","BASS","k-means","Louvain")
+rownames(PAS) <- paste0("Muestra",1:12)
+
+PAS <- melt(PAS)
+colnames(PAS) <- c("Muestras","Métodos","value")
+
+is_outlier <- function(x) {
+  return(x < quantile(x, 0.25) - 1.5 * IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x))
+}
+
+# Crear una columna que indique si el valor es un outlier
+PAS <- PAS %>%
+  group_by(Métodos) %>%
+  mutate(is_outlier = ifelse(is_outlier(value), Muestras, NA))
+
+ggplot(PAS, aes(x = Métodos, y = value, fill = Métodos)) +
+  geom_boxplot() +
+  geom_text_repel(aes(label = is_outlier), na.rm = TRUE, size = 4, max.overlaps = 10) +
+  labs(y = NULL, x = NULL, title = "PAS") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")
+```
+
+### ASW
+
+```{r}
+ASW <- matrix(unlist(lapply(bench_list, function(x) x["ASW",])), byrow = T, ncol = 6)
+colnames(ASW) <- c("BayesSpace","DR.SC","SC-MEB","BASS","k-means","Louvain")
+rownames(ASW) <- paste0("Muestra",1:12)
+
+ASW <- melt(ASW)
+colnames(ASW) <- c("Muestras","Métodos","value")
+
+is_outlier <- function(x) {
+  return(x < quantile(x, 0.25) - 1.5 * IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x))
+}
+
+# Crear una columna que indique si el valor es un outlier
+ASW <- ASW %>%
+  group_by(Métodos) %>%
+  mutate(is_outlier = ifelse(is_outlier(value), Muestras, NA))
+
+ggplot(ASW, aes(x = Métodos, y = value, fill = Métodos)) +
+  geom_boxplot() +
+  geom_text_repel(aes(label = is_outlier), na.rm = TRUE, size = 4, max.overlaps = 10) +
+  labs(y = NULL, x = NULL, title = "ASW") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")
+```
+
+### MoranI
+
+```{r}
+MoranI <- matrix(unlist(lapply(bench_list, function(x) x["MoranI",])), byrow = T, ncol = 6)
+colnames(MoranI) <- c("BayesSpace","DR.SC","SC-MEB","BASS","k-means","Louvain")
+rownames(MoranI) <- paste0("Muestra",1:12)
+
+MoranI <- melt(MoranI)
+colnames(MoranI) <- c("Muestras","Métodos","value")
+
+is_outlier <- function(x) {
+  return(x < quantile(x, 0.25) - 1.5 * IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x))
+}
+
+# Crear una columna que indique si el valor es un outlier
+MoranI <- MoranI %>%
+  group_by(Métodos) %>%
+  mutate(is_outlier = ifelse(is_outlier(value), Muestras, NA))
+
+ggplot(MoranI, aes(x = Métodos, y = value, fill = Métodos)) +
+  geom_boxplot() +
+  geom_text_repel(aes(label = is_outlier), na.rm = TRUE, size = 4, max.overlaps = 10) +
+  labs(y = NULL, x = NULL, title = "MoranI") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")
+```
+
+### GearyC
+
+```{r}
+GearyC <- matrix(unlist(lapply(bench_list, function(x) x["GearyC",])), byrow = T, ncol = 6)
+colnames(GearyC) <- c("BayesSpace","DR.SC","SC-MEB","BASS","k-means","Louvain")
+rownames(GearyC) <- paste0("Muestra",1:12)
+
+GearyC <- melt(GearyC)
+colnames(GearyC) <- c("Muestras","Métodos","value")
+
+is_outlier <- function(x) {
+  return(x < quantile(x, 0.25) - 1.5 * IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x))
+}
+
+# Crear una columna que indique si el valor es un outlier
+GearyC <- GearyC %>%
+  group_by(Métodos) %>%
+  mutate(is_outlier = ifelse(is_outlier(value), Muestras, NA))
+
+ggplot(GearyC, aes(x = Métodos, y = value, fill = Métodos)) +
+  geom_boxplot() +
+  geom_text_repel(aes(label = is_outlier), na.rm = TRUE, size = 4, max.overlaps = 10) +
+  labs(y = NULL, x = NULL, title = "GearyC") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")
+```
+
+### Escalabilidad
+
+```{r}
+start_time <- proc.time()
+
+end_time <- proc.time()
+
+tiempo <- end_time - start_time
+
+as.numeric(tiempo[3])
+
+tiempo <- c()
+for (i in 1:12){
+  start_time <- proc.time()
+print("hola :)")
+  end_time <- proc.time()
+
+tiempo[i] <- as.numeric((end_time - start_time)[3])
+
+}
+```

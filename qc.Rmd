@@ -1,0 +1,771 @@
+---
+title: "QC"
+output: html_document
+date: "2024-06-09"
+---
+
+```{r, eval=F, include=F}
+library(SpatialExperiment)
+library(spatialLIBD)
+library(Seurat)
+# library(infotheo)
+# library(clevr)
+library(ggplot2)
+library(cluster)
+library(scran)
+library(scater)
+library(pheatmap)
+library(patchwork)
+library(ggplot2)
+library(reshape2)
+library(ggspavis)
+library(dplyr)
+library(ggrepel)
+```
+
+```{r carga datos}
+load("./datos/definitivo/dlpfc_list_definitive.Rdata")
+
+is_mito <- grepl("(^MT-)|(^mt-)", rowData(dlpfc_list[[1]])$gene_name)
+table(is_mito)
+
+dlpfc_list <- lapply(dlpfc_list, function(x) addPerCellQC(x, subsets = list(mito = is_mito)))
+```
+
+```{r qc 1}
+plotSpotQC(dlpfc_list[[1]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 500)
+
+# plotSpots(dlpfc_list[[1]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[1]])$sum < 500
+colData(dlpfc_list[[1]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[1]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[1]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 400)
+
+# plotSpots(dlpfc_list[[1]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[1]])$detected < 400
+colData(dlpfc_list[[1]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[1]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[1]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 29)
+
+# plotSpots(dlpfc_list[[1]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[1]])$subsets_mito_percent > 29
+colData(dlpfc_list[[1]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[1]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[1]]), aes(x = cell_count)) +
+  geom_histogram(bins = 19, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[1]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[1]])$cell_count > 10
+colData(dlpfc_list[[1]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[1]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[1]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[1]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+```
+
+```{r qc 2}
+plotSpotQC(dlpfc_list[[2]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 450)
+
+# plotSpots(dlpfc_list[[2]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[2]])$sum < 450
+colData(dlpfc_list[[2]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[2]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[2]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 300)
+
+# plotSpots(dlpfc_list[[2]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[2]])$detected < 300
+colData(dlpfc_list[[2]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[2]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[2]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 28)
+
+# plotSpots(dlpfc_list[[2]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[2]])$subsets_mito_percent > 28
+colData(dlpfc_list[[2]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[2]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[2]]), aes(x = cell_count)) +
+  geom_histogram(bins = 19, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[2]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[2]])$cell_count > 10
+colData(dlpfc_list[[2]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[2]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[2]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[2]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+```
+
+```{r qc 3}
+plotSpotQC(dlpfc_list[[3]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 450)
+
+# plotSpots(dlpfc_list[[3]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[3]])$sum < 450
+colData(dlpfc_list[[3]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[3]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[3]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 300)
+
+# plotSpots(dlpfc_list[[3]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[3]])$detected < 300
+colData(dlpfc_list[[3]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[3]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[3]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 26)
+
+# plotSpots(dlpfc_list[[3]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[3]])$subsets_mito_percent > 26
+colData(dlpfc_list[[3]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[3]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[3]]), aes(x = cell_count)) +
+  geom_histogram(bins = 19, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[3]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[3]])$cell_count > 10
+colData(dlpfc_list[[3]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[3]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[3]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[3]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+```
+
+```{r qc 4}
+plotSpotQC(dlpfc_list[[4]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 450)
+
+# plotSpots(dlpfc_list[[4]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[4]])$sum < 450
+colData(dlpfc_list[[4]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[4]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[4]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 300)
+
+# plotSpots(dlpfc_list[[4]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[4]])$detected < 300
+colData(dlpfc_list[[4]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[4]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[4]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 27)
+
+# plotSpots(dlpfc_list[[4]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[4]])$subsets_mito_percent > 27
+colData(dlpfc_list[[4]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[4]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[4]]), aes(x = cell_count)) +
+  geom_histogram(bins = 13, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[4]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[4]])$cell_count > 10
+colData(dlpfc_list[[4]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[4]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[4]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[4]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+```
+
+```{r qc 5}
+plotSpotQC(dlpfc_list[[5]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 500)
+
+# plotSpots(dlpfc_list[[5]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[5]])$sum < 500
+colData(dlpfc_list[[5]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[5]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[5]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 400)
+
+# plotSpots(dlpfc_list[[5]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[5]])$detected < 400
+colData(dlpfc_list[[5]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[5]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[5]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 30)
+
+# plotSpots(dlpfc_list[[5]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[5]])$subsets_mito_percent > 30
+colData(dlpfc_list[[5]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[5]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[5]]), aes(x = cell_count)) +
+  geom_histogram(bins = 13, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[5]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[5]])$cell_count > 10
+colData(dlpfc_list[[5]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[5]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[5]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[5]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+```
+
+```{r qc 6}
+plotSpotQC(dlpfc_list[[6]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 500)
+
+# plotSpots(dlpfc_list[[6]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[6]])$sum < 500
+colData(dlpfc_list[[6]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[6]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[6]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 400)
+
+# plotSpots(dlpfc_list[[6]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[6]])$detected < 400
+colData(dlpfc_list[[6]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[6]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[6]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 30)
+
+# plotSpots(dlpfc_list[[6]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[6]])$subsets_mito_percent > 30
+colData(dlpfc_list[[6]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[6]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[6]]), aes(x = cell_count)) +
+  geom_histogram(bins = 17, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 13.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[6]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[6]])$cell_count > 13
+colData(dlpfc_list[[6]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[6]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[6]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[6]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+```
+
+```{r qc 7}
+plotSpotQC(dlpfc_list[[7]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 500)
+
+# plotSpots(dlpfc_list[[7]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[7]])$sum < 500
+colData(dlpfc_list[[7]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[7]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[7]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 400)
+
+# plotSpots(dlpfc_list[[7]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[7]])$detected < 400
+colData(dlpfc_list[[7]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[7]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[7]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 30)
+
+# plotSpots(dlpfc_list[[7]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[7]])$subsets_mito_percent > 30
+colData(dlpfc_list[[7]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[7]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[7]]), aes(x = cell_count)) +
+  geom_histogram(bins = 17, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[7]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[7]])$cell_count > 10
+colData(dlpfc_list[[7]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[7]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[7]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[7]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+```
+
+```{r qc 8}
+plotSpotQC(dlpfc_list[[8]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 450)
+
+# plotSpots(dlpfc_list[[8]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[8]])$sum < 450
+colData(dlpfc_list[[8]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[8]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[8]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 300)
+
+# plotSpots(dlpfc_list[[8]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[8]])$detected < 300
+colData(dlpfc_list[[8]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[8]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[8]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 30)
+
+# plotSpots(dlpfc_list[[8]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[8]])$subsets_mito_percent > 30
+colData(dlpfc_list[[8]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[8]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[8]]), aes(x = cell_count)) +
+  geom_histogram(bins = 17, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[8]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[8]])$cell_count > 10
+colData(dlpfc_list[[8]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[8]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[8]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[8]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+
+plotSpots(dlpfc_list[[8]], annotate = "layer_guess", point_size = 0.9)
+```
+
+```{r qc 9}
+plotSpotQC(dlpfc_list[[9]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 600)
+
+# plotSpots(dlpfc_list[[9]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[9]])$sum < 600
+colData(dlpfc_list[[9]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[9]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[9]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 400)
+
+# plotSpots(dlpfc_list[[9]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[9]])$detected < 400
+colData(dlpfc_list[[9]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[9]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[9]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 28)
+
+# plotSpots(dlpfc_list[[9]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[9]])$subsets_mito_percent > 28
+colData(dlpfc_list[[9]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[9]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[9]]), aes(x = cell_count)) +
+  geom_histogram(bins = 17, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[9]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[9]])$cell_count > 10
+colData(dlpfc_list[[9]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[9]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[9]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[9]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+
+plotSpots(dlpfc_list[[9]], annotate = "layer_guess", point_size = 0.9)
+```
+
+```{r qc 10}
+plotSpotQC(dlpfc_list[[10]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 700)
+
+# plotSpots(dlpfc_list[[10]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[10]])$sum < 700
+colData(dlpfc_list[[10]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[10]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[10]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 500)
+
+# plotSpots(dlpfc_list[[10]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[10]])$detected < 500
+colData(dlpfc_list[[10]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[10]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[10]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 26)
+
+# plotSpots(dlpfc_list[[10]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[10]])$subsets_mito_percent > 26
+colData(dlpfc_list[[10]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[10]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[10]]), aes(x = cell_count)) +
+  geom_histogram(bins = 17, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[10]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[10]])$cell_count > 10
+colData(dlpfc_list[[10]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[10]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[10]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[10]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+
+plotSpots(dlpfc_list[[10]], annotate = "layer_guess", point_size = 0.9)
+```
+
+```{r qc 11}
+plotSpotQC(dlpfc_list[[11]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 700)
+
+# plotSpots(dlpfc_list[[11]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[11]])$sum < 700
+colData(dlpfc_list[[11]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[11]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[11]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 500)
+
+# plotSpots(dlpfc_list[[11]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[11]])$detected < 500
+colData(dlpfc_list[[11]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[11]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[11]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 30)
+
+# plotSpots(dlpfc_list[[11]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[11]])$subsets_mito_percent > 30
+colData(dlpfc_list[[11]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[11]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[11]]), aes(x = cell_count)) +
+  geom_histogram(bins = 17, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 10.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[11]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[11]])$cell_count > 10
+colData(dlpfc_list[[11]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[11]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[11]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[11]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+
+plotSpots(dlpfc_list[[11]], annotate = "layer_guess", point_size = 0.9)
+```
+
+```{r qc 12}
+plotSpotQC(dlpfc_list[[12]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "sum", y_threshold = 700)
+
+# plotSpots(dlpfc_list[[12]], annotate = "sum", point_size = 0.9 , pal = "viridis")
+
+qc_lib_size <- colData(dlpfc_list[[12]])$sum < 700
+colData(dlpfc_list[[12]])$qc_lib_size <- qc_lib_size
+
+plotSpotQC(dlpfc_list[[12]], plot_type = "spot", 
+           annotate = "qc_lib_size", point_size = 0.9)
+
+plotSpotQC(dlpfc_list[[12]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "detected", y_threshold = 500)
+
+# plotSpots(dlpfc_list[[12]], annotate = "detected", point_size = 0.9 , pal = "viridis")
+
+qc_detected <- colData(dlpfc_list[[12]])$detected < 500
+colData(dlpfc_list[[12]])$qc_detected <- qc_detected
+
+plotSpotQC(dlpfc_list[[12]], plot_type = "spot", 
+           annotate = "qc_detected", point_size = 0.9)
+
+
+plotSpotQC(dlpfc_list[[12]], plot_type = "scatter", 
+           x_metric = "cell_count", y_metric = "subsets_mito_percent", y_threshold = 30)
+
+# plotSpots(dlpfc_list[[12]], annotate = "subsets_mito_percent", point_size = 0.9 , pal = "viridis")
+
+qc_mito <- colData(dlpfc_list[[12]])$subsets_mito_percent > 30
+colData(dlpfc_list[[12]])$qc_mito <- qc_mito
+
+plotSpotQC(dlpfc_list[[12]], plot_type = "spot", 
+           annotate = "qc_mito", point_size = 0.9)
+
+ggplot(colData(dlpfc_list[[12]]), aes(x = cell_count)) +
+  geom_histogram(bins = 17, fill = "#505050", color = NA) +
+  geom_vline(xintercept = 13.2, color = "red", linetype = "solid", size = 1) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank())
+
+# plotSpots(dlpfc_list[[12]], annotate = "cell_count", point_size = 0.9 , pal = "viridis")
+
+qc_cell_count <- colData(dlpfc_list[[12]])$cell_count > 13
+colData(dlpfc_list[[12]])$qc_cell_count <- qc_cell_count
+
+plotSpotQC(dlpfc_list[[12]], plot_type = "spot", 
+           annotate = "qc_cell_count", point_size = 0.9)
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito, qc_cell_count), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito | qc_cell_count
+table(discard)
+
+colData(dlpfc_list[[12]])$discard <- discard
+
+plotSpotQC(dlpfc_list[[12]], plot_type = "spot", 
+           annotate = "discard", point_size = 0.9)
+
+plotSpots(dlpfc_list[[12]], annotate = "layer_guess", point_size = 0.9)
+```
+
+```{r}
+descartados <- unlist(lapply( dlpfc_list, function(x) sum(x$discard)))
+spots <- unlist(lapply( dlpfc_list, function(x) dim(x)[2]))
+  
+cbind(spots, descartados)
+```
+
